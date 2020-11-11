@@ -9,39 +9,8 @@ import threading
 import subprocess
 import logging
 
-####---from mpi4py import MPI
-
-
 def install(package):
     subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-
-
-def flush(proc, proc_log):
-    while True:
-        proc_out = proc.stdout.readline()
-        if proc_out == "" and proc.poll() is not None:
-            proc_log.close()
-            break
-        elif proc_out:
-            sys.stdout.write(proc_out)
-            proc_log.write(proc_out)
-            proc_log.flush()
-
-
-def evaluate_cmd(cmd, logFileName):
-    cmd_log = open(logFileName, "a")
-    cmd_proc = subprocess.Popen(
-        cmd.split(),
-        universal_newlines=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-
-    cmd_flush = threading.Thread(target=flush, args=(cmd_proc, cmd_log))
-    cmd_flush.start()
-    flush(cmd_proc, cmd_log)
-    return cmd_proc
-
 
 if __name__ == "__main__":
     logger = logging.getLogger(__name__)
@@ -126,22 +95,8 @@ if __name__ == "__main__":
 
     flush(jupyter_proc, jupyter_log)
 
-    extraCMDS = {
-        f"wget https://api.ngc.nvidia.com/v2/resources/nvidia/med/getting_started/versions/1/zip": "unload_log.txt",
-        f"mv zip zip.zip": "mv_log.txt",
-        f"unzip zip.zip": "unzip_log.txt",
-    }
-    extraCMDS_procs = {}
-
-    for key in extraCMDS:
-        extraCMDS_procs[key] = evaluate_cmd(key, extraCMDS[key])
-
     if jupyter_proc:
         jupyter_proc.kill()
-
-    for key in extraCMDS_procs:
-        if extraCMDS_procs[key]:
-            extraCMDS_procs[key].kill()
 
     run.complete()
     run.cancel()

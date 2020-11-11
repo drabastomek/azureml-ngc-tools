@@ -1,3 +1,4 @@
 azureml-sdk>=1.0.83
 click>=7.1.2
 tqdm>=4.48.0
+dask-cloudprovider>=0.4.1

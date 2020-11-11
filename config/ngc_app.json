@@ -10,7 +10,8 @@
                 "filename": <FILENAME_TO_SAVE_TO>,
                 "localdirectory": <DIRECTORY_TO_EXTRACT_CONTENTS>,
                 "computedirectory": <DIRECTORY_TO_UPLOAD_CONTENTS>,
-                "zipped": <false|true>
+                "zipped": <false|true>,
+                "source": <github>
             },
             ...
         ]

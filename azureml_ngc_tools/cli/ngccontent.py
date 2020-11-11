@@ -5,6 +5,8 @@ from tqdm import tqdm
 import zipfile
 import json
 import logging
+import threading
+import subprocess
 
 logger = logging.getLogger("azureml_ngc.ngc_content")
 
@@ -67,8 +69,55 @@ def upload_data(workspace, datastore, src_dir, tgt_path, overwrite=False):
         f"    -->> [UPLOAD] Completed uploading folder {src_dir} to {tgt_path} in {datastore.name}... <<--"
     )
 
-
 def get_config(configfile):
     jsonfile = open(configfile)
     configdata = json.load(jsonfile)
     return configdata
+
+def flush(proc, proc_log):
+    while True:
+        proc_out = proc.stdout.readline()
+        if proc_out == "" and proc.poll() is not None:
+            proc_log.close()
+            break
+        elif proc_out:
+            sys.stdout.write(proc_out)
+            proc_log.write(proc_out)
+            proc_log.flush()
+
+def evaluate_cmd(cmd, logFileName):
+    cmd_log = open(logFileName, "a")
+    cmd_proc = subprocess.Popen(
+        cmd.split(),
+        universal_newlines=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    cmd_flush = threading.Thread(target=flush, args=(cmd_proc, cmd_log))
+    cmd_flush.start()
+    flush(cmd_proc, cmd_log)
+    return cmd_proc
+
+def validate_path(datadir,destfolder):
+    subfolders = destfolder.split('/')
+    if(len(subfolders)>1):
+        current_dir = datadir
+        for subfolder in subfolders[0:-1]:
+            current_dir = os.path.join(current_dir, subfolder)
+            if not os.path.exists(current_dir):
+                os.makedirs(current_dir)
+
+def clone_github_repo(github_url,datadir, destfolder):
+    path = os.getcwd()
+    data_dir = os.path.abspath(os.path.join(path, datadir))
+
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+    
+    validate_path(datadir,destfolder)
+    logFileName = os.path.join(data_dir, '{}_upload_log.txt'.format(destfolder))
+    destfolder = os.path.join(data_dir, destfolder)
+    cmd = 'git clone {} {}'.format(github_url,destfolder)
+    proc = evaluate_cmd(cmd, logFileName)
+    proc.kill()
+

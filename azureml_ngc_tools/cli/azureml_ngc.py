@@ -3,7 +3,7 @@ import logging
 from azureml.core import Workspace, Environment
 from azureml.core.conda_dependencies import CondaDependencies
 from azureml.core.compute import ComputeTarget, AmlCompute
-
+from dask_cloudprovider import AzureMLCluster
 import click, os, time, re
 
 from azureml_ngc_tools.AzureMLComputeCluster import AzureMLComputeCluster
@@ -142,15 +142,20 @@ def start(login, app):
         targetfile = additional_content["filename"]
         src_path = additional_content["localdirectory"]
         dest_path = additional_content["computedirectory"]
-
-        if app_config["additional_content"]["download_content"]:
-            ngccontent.download(url, "additional_content", targetfile)
-
+        
         if (
-            app_config["additional_content"]["unzip_content"]
-            and additional_content["zipped"]
+            "source" in additional_content.keys()
+            and additional_content["source"] == "github"
         ):
-            ngccontent.unzipFile(targetfile, "additional_content", src_path)
+            ngccontent.clone_github_repo(url,"additional_content",src_path)
+        else:
+            if app_config["additional_content"]["download_content"]:
+                ngccontent.download(url, "additional_content", targetfile)
+            if (
+                app_config["additional_content"]["unzip_content"]
+                and additional_content["zipped"]
+            ):
+                ngccontent.unzipFile(targetfile, "additional_content", src_path)
 
         if app_config["additional_content"]["upload_content"]:
             ngccontent.upload_data(
@@ -160,17 +165,31 @@ def start(login, app):
                 dest_path,
             )
 
-    amlcluster = AzureMLComputeCluster(
-        workspace=ws,
-        compute_target=ct,
-        initial_node_count=1,
-        experiment_name=login_config["aml_compute"]["exp_name"],
-        environment_definition=env,
-        jupyter_port=login_config["aml_compute"]["jupyter_port"],
-        telemetry_opt_out=login_config["azureml_user"]["telemetry_opt_out"],
-        admin_username=login_config["aml_compute"]["admin_name"],
-        admin_ssh_key=pri_key_file,
-    )
+    if (login_config["aml_compute"]["max_nodes"]==1):    
+        amlcluster = AzureMLComputeCluster(
+            workspace=ws,
+            compute_target=ct,
+            initial_node_count=1,
+            experiment_name=login_config["aml_compute"]["exp_name"],
+            environment_definition=env,
+            jupyter_port=login_config["aml_compute"]["jupyter_port"],
+            telemetry_opt_out=login_config["azureml_user"]["telemetry_opt_out"],
+            admin_username=login_config["aml_compute"]["admin_name"],
+            admin_ssh_key=pri_key_file,
+        )
+    else:
+        logger.info("Creating a Dask Cluster with {} nodes".format(login_config["aml_compute"]["max_nodes"]))
+        amlcluster = AzureMLCluster(
+            workspace=ws,
+            compute_target=ct,
+            initial_node_count=login_config["aml_compute"]["max_nodes"],
+            experiment_name=login_config["aml_compute"]["exp_name"],
+            environment_definition=env,
+            jupyter_port=login_config["aml_compute"]["jupyter_port"],
+            telemetry_opt_out=login_config["azureml_user"]["telemetry_opt_out"],
+            admin_username=login_config["aml_compute"]["admin_name"],
+            admin_ssh_key=pri_key_file,
+        )       
 
     logger.info(f"\n    Go to: {amlcluster.jupyter_link}")
     logger.info("    Press Ctrl+C to stop the cluster.")
